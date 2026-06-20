@@ -1,0 +1,24 @@
+{
+  "name": "NEURON · Centro de Mando NEXTEP",
+  "short_name": "NEURON",
+  "description": "Centro de mando neuronal de NEXTEP Asesores: estadísticas en vivo y agentes proactivos.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#070b18",
+  "theme_color": "#070b18",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='38' fill='%23070b18'/%3E%3Ccircle cx='96' cy='96' r='34' fill='none' stroke='%2300e5ff' stroke-width='6'/%3E%3Ccircle cx='96' cy='96' r='12' fill='%2300e5ff'/%3E%3Cg fill='%238b5cff'%3E%3Ccircle cx='50' cy='56' r='8'/%3E%3Ccircle cx='142' cy='56' r='8'/%3E%3Ccircle cx='50' cy='136' r='8'/%3E%3Ccircle cx='142' cy='136' r='8'/%3E%3C/g%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%23070b18'/%3E%3Ccircle cx='256' cy='256' r='92' fill='none' stroke='%2300e5ff' stroke-width='16'/%3E%3Ccircle cx='256' cy='256' r='32' fill='%2300e5ff'/%3E%3Cg fill='%238b5cff'%3E%3Ccircle cx='130' cy='150' r='22'/%3E%3Ccircle cx='382' cy='150' r='22'/%3E%3Ccircle cx='130' cy='362' r='22'/%3E%3Ccircle cx='382' cy='362' r='22'/%3E%3C/g%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

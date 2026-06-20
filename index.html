@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#070b18" />
+<title>NEXTEP · Centro de Mando Neuronal</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='42' fill='%230a1030' stroke='%2300e5ff' stroke-width='4'/%3E%3Ccircle cx='50' cy='50' r='10' fill='%2300e5ff'/%3E%3C/svg%3E" />
+
+<!-- ============================================================= -->
+<!--  CONFIGURACIÓN  ·  EDITA AQUÍ                                   -->
+<!--  (La clave 'publishable' es PÚBLICA por diseño; la protege RLS.-->
+<!--   NUNCA pegues aquí la SERVICE_ROLE key.)                       -->
+<!-- ============================================================= -->
+<script>
+window.NEURON = {
+  SUPABASE_URL: "https://gtbabarvybekkoopzskq.supabase.co",
+  SUPABASE_KEY: "sb_publishable_v_14fq-nLnFQ5c5UOwZtIw_E_ekX1jt",
+  REFRESH_MS: 30000,
+  // Sitios para el chequeo de salud (edita los dominios reales si difieren)
+  SITES: [
+    { name: "Web pública",   url: "https://nextstepasesor.com" },
+    { name: "Portal cliente", url: "https://client.nextstepasesor.com" },
+    { name: "Portal agente",  url: "https://agent.nextstepasesor.com" },
+    { name: "Panel admin",    url: "https://admin.nextstepasesor.com" }
+  ],
+  // Umbrales (SLA) que usan los agentes para detectar incidencias
+  SLA: {
+    depositReviewHours: 6,    // depósito pendiente más de X h => alerta
+    withdrawalReviewHours: 12,// retiro pendiente más de X h => alerta (riesgo/AML)
+    ticketReplyHours: 12,     // ticket de soporte sin responder
+    operationOpenDays: 30,    // operación abierta demasiado tiempo
+    largeWithdrawalEur: 5000, // retiro grande => revisión reforzada
+    bigLossEur: 1000,         // operación con pérdida grande
+    siteSlowMs: 3500          // portal por encima de X ms => "lento"
+  },
+  // ── MISIÓN DEL CEO (objetivo prioritario) ──
+  GOAL: {
+    target: 2000,             // 2000 personas registradas
+    deadline: "2026-12-31",   // "antes de 2027"
+    startDate: "2026-06-19",  // empieza hoy
+    label: "Registros de nuevos clientes"
+  },
+  // ── CLIENTE IDEAL (ICP) ──
+  ICP: {
+    edadMin: 40, edadIdealMin: 60, edadIdealMax: 65,
+    generos: "Hombres y mujeres",
+    perfil: "Con trabajo / ingresos estables",
+    inversionMin: 250,
+    resumen: "Empleados/as 40+ (ideal 60-65), ticket mínimo 250 €"
+  }
+};
+</script>
+
+<style>
+:root{
+  --bg:#070b18; --bg2:#0a1030; --panel:rgba(18,26,54,.72); --panel2:rgba(13,19,42,.9);
+  --line:rgba(120,160,255,.14); --txt:#e7ecff; --muted:#8da0c8; --dim:#5d6f9c;
+  --cyan:#00e5ff; --violet:#8b5cff; --green:#26e6a6; --amber:#ffb020; --red:#ff5470; --blue:#3d8bff;
+  --crit:#ff3b5c; --high:#ff8a3d; --med:#ffd23d; --info:#37c2ff; --ok:#26e6a6;
+  --radius:16px; --shadow:0 18px 50px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  font-family:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  background:
+    radial-gradient(1200px 700px at 80% -10%, rgba(139,92,255,.18), transparent 55%),
+    radial-gradient(1000px 600px at 0% 110%, rgba(0,229,255,.12), transparent 55%),
+    var(--bg);
+  color:var(--txt); -webkit-font-smoothing:antialiased; min-height:100%;
+}
+a{color:var(--cyan);text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+.hidden{display:none!important}
+
+/* ---------- LOGIN ---------- */
+#login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;z-index:50}
+.login-card{width:100%;max-width:420px;background:var(--panel2);border:1px solid var(--line);border-radius:22px;
+  padding:34px 30px;box-shadow:var(--shadow);backdrop-filter:blur(14px)}
+.brain{width:74px;height:74px;margin:0 auto 14px;display:block}
+.login-card h1{font-size:20px;margin:0 0 4px;text-align:center;letter-spacing:.3px}
+.login-card p.sub{margin:0 0 22px;text-align:center;color:var(--muted);font-size:13px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+.field input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);
+  background:rgba(8,12,28,.7);color:var(--txt);font-size:14px;outline:none}
+.field input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,229,255,.15)}
+.btn{width:100%;padding:13px;border:none;border-radius:12px;font-size:14px;font-weight:600;
+  background:linear-gradient(135deg,var(--cyan),var(--violet));color:#04122a}
+.btn:disabled{opacity:.6;cursor:wait}
+.err{color:var(--red);font-size:13px;margin-top:12px;text-align:center;min-height:18px}
+
+/* ---------- APP SHELL ---------- */
+#app{max-width:1380px;margin:0 auto;padding:18px clamp(12px,3vw,28px) 60px}
+header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 0 18px}
+.logo{display:flex;align-items:center;gap:11px}
+.logo .dot{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--cyan),var(--violet));
+  display:grid;place-items:center;font-weight:800;color:#04122a;box-shadow:0 0 22px rgba(0,229,255,.4)}
+.logo b{font-size:16px;letter-spacing:.4px}
+.logo span{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+.top .spacer{flex:1}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:999px;
+  background:var(--panel);border:1px solid var(--line);font-size:12px;color:var(--muted)}
+.pill .led{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+.pill .led.off{background:var(--red);box-shadow:0 0 10px var(--red)}
+.icon-btn{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:12px}
+.icon-btn:hover{border-color:var(--cyan)}
+
+.section-title{display:flex;align-items:center;gap:10px;margin:26px 2px 12px;font-size:13px;
+  text-transform:uppercase;letter-spacing:1.4px;color:var(--dim)}
+.section-title::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* ---------- KPI GRID ---------- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:13px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:15px 16px;position:relative;overflow:hidden}
+.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent,var(--cyan))}
+.kpi .k-label{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.4px}
+.kpi .k-val{font-size:25px;font-weight:700;margin-top:8px;line-height:1.1}
+.kpi .k-sub{font-size:12px;color:var(--dim);margin-top:5px;min-height:16px}
+.kpi.alert::before{background:var(--red)}
+.kpi.alert .k-val{color:#ffd0d8}
+.kpi .k-ico{font-size:14px;opacity:.9}
+
+/* ---------- LAYOUT GRID ---------- */
+.grid2{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;align-items:start}
+@media(max-width:980px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.card h3{margin:0 0 4px;font-size:14px;letter-spacing:.3px}
+.card .muted{color:var(--muted);font-size:12px}
+
+/* ---------- NEURAL MAP ---------- */
+.neuro-wrap{position:relative}
+#neuro{width:100%;height:auto;display:block;touch-action:none}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;font-size:11.5px;color:var(--muted)}
+.legend i{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle}
+
+/* ---------- CEO / EXEC SUMMARY ---------- */
+.exec{display:flex;flex-direction:column;gap:10px}
+.exec .headline{font-size:14px;line-height:1.5}
+.sev-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.sev-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;font-size:12px;font-weight:600;
+  background:rgba(255,255,255,.04);border:1px solid var(--line)}
+.sev-chip b{font-size:13px}
+.dot-c{width:9px;height:9px;border-radius:50%}
+.directive{margin-top:10px}
+.directive textarea{width:100%;min-height:60px;resize:vertical;border-radius:12px;border:1px solid var(--line);
+  background:rgba(8,12,28,.6);color:var(--txt);padding:10px 12px;font-size:13px;font-family:inherit}
+
+/* ---------- AGENTS (CEO ROSTER) ---------- */
+.agents{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:13px}
+.agent{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:9px}
+.agent.paused{opacity:.55}
+.agent .a-head{display:flex;align-items:center;gap:10px}
+.agent .a-ico{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:19px;
+  background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.agent .a-name{font-weight:700;font-size:14px}
+.agent .a-role{font-size:11.5px;color:var(--muted)}
+.agent .a-mission{font-size:12px;color:var(--dim);line-height:1.45;min-height:34px}
+.agent .a-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:2px}
+.badge{font-size:11px;padding:3px 9px;border-radius:999px;font-weight:600}
+.badge.ok{background:rgba(38,230,166,.13);color:var(--ok)}
+.badge.warn{background:rgba(255,210,61,.14);color:#ffe08a}
+.badge.bad{background:rgba(255,59,92,.15);color:#ff9eb0}
+.switch{position:relative;width:42px;height:23px;border-radius:999px;background:rgba(255,255,255,.12);border:none;transition:.2s}
+.switch.on{background:linear-gradient(135deg,var(--cyan),var(--violet))}
+.switch::after{content:"";position:absolute;top:2.5px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
+.switch.on::after{left:21px}
+
+/* ---------- FINDINGS INBOX ---------- */
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.chip-f{padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:12px}
+.chip-f.active{border-color:var(--cyan);color:var(--txt);background:rgba(0,229,255,.08)}
+.findings{display:flex;flex-direction:column;gap:9px;max-height:560px;overflow:auto;padding-right:4px}
+.finding{display:flex;gap:12px;background:var(--panel2);border:1px solid var(--line);border-left-width:4px;border-radius:12px;padding:12px 14px}
+.finding.crit{border-left-color:var(--crit)} .finding.high{border-left-color:var(--high)}
+.finding.med{border-left-color:var(--med)} .finding.info{border-left-color:var(--info)}
+.finding.done{opacity:.45}
+.finding .f-body{flex:1;min-width:0}
+.finding .f-title{font-weight:650;font-size:13.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.finding .f-detail{font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.5}
+.finding .f-meta{font-size:11px;color:var(--dim);margin-top:6px;display:flex;gap:10px;flex-wrap:wrap}
+.finding .f-actions{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.tag{font-size:10px;padding:2px 8px;border-radius:6px;background:rgba(255,255,255,.06);color:var(--muted)}
+.sev-tag{font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.5px}
+.sev-tag.crit{background:rgba(255,59,92,.16);color:#ff9eb0}
+.sev-tag.high{background:rgba(255,138,61,.16);color:#ffc59b}
+.sev-tag.med{background:rgba(255,210,61,.16);color:#ffe79b}
+.sev-tag.info{background:rgba(55,194,255,.16);color:#a9e3ff}
+.mini-btn{font-size:11px;padding:5px 9px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--muted);white-space:nowrap}
+.mini-btn:hover{border-color:var(--cyan);color:var(--txt)}
+.empty{text-align:center;color:var(--dim);padding:30px;font-size:13px}
+
+/* ---------- ACTIVITY + CHARTS ---------- */
+.feed{display:flex;flex-direction:column;gap:2px;max-height:420px;overflow:auto}
+.feed .row{display:flex;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);font-size:12.5px;align-items:center}
+.feed .row:last-child{border-bottom:none}
+.feed .av{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:13px;background:rgba(255,255,255,.05);flex-shrink:0}
+.feed .ftxt{flex:1;min-width:0}
+.feed .ftxt b{font-weight:600}
+.feed .ft{color:var(--dim);font-size:11px;white-space:nowrap}
+.chart-box{position:relative;height:230px}
+.sites{display:flex;flex-direction:column;gap:8px}
+.site{display:flex;align-items:center;gap:10px;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+.site .s-led{width:9px;height:9px;border-radius:50%;background:var(--dim)}
+.site .s-led.up{background:var(--green);box-shadow:0 0 8px var(--green)}
+.site .s-led.down{background:var(--red);box-shadow:0 0 8px var(--red)}
+.site .s-name{flex:1}
+.site .s-ms{color:var(--dim);font-size:11px}
+
+/* ---------- MISIÓN CEO ---------- */
+.mission{border-color:rgba(0,229,255,.35);box-shadow:0 0 40px rgba(0,229,255,.07) inset}
+.mission .m-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.mission .m-goal{font-size:15px}
+.mission .m-goal b{font-size:28px;color:#fff}
+.mission .bar{height:14px;border-radius:8px;background:rgba(255,255,255,.08);overflow:hidden;margin:14px 0 6px;position:relative}
+.mission .bar > span{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),var(--violet));border-radius:8px;transition:width .6s}
+.mission .bar .need{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.mission .m-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:16px}
+.mission .m-stat{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+.mission .m-stat .l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.mission .m-stat .v{font-size:19px;font-weight:700;margin-top:4px}
+.mission .icp{margin-top:14px;font-size:12.5px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.mission .chip-icp{background:rgba(0,229,255,.08);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px;color:var(--txt)}
+.status-ok{color:var(--ok)} .status-warn{color:var(--amber)} .status-bad{color:var(--red)}
+/* ---------- JARVIS (asistente) ---------- */
+#jarvisFab{position:fixed;right:22px;bottom:22px;width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;
+  background:linear-gradient(135deg,var(--cyan),var(--violet));color:#04122a;font-size:27px;z-index:60;
+  box-shadow:0 10px 30px rgba(0,229,255,.45);animation:floaty 3s ease-in-out infinite}
+#jarvisFab .j-badge{position:absolute;top:-3px;right:-3px;min-width:22px;height:22px;border-radius:11px;background:var(--red);
+  color:#fff;font-size:12px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 5px;box-shadow:0 0 10px var(--red)}
+#jarvisFab.alert{animation:pulse 1s infinite}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+#jarvis{position:fixed;right:22px;bottom:22px;z-index:61;display:flex;flex-direction:column;overflow:hidden;
+  width:min(380px,calc(100vw - 28px));height:min(560px,calc(100vh - 40px));
+  background:var(--panel2);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);backdrop-filter:blur(14px)}
+.j-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);
+  background:linear-gradient(135deg,rgba(0,229,255,.12),rgba(139,92,255,.12))}
+.j-title{font-weight:700;font-size:14px} .j-tools{display:flex;gap:6px}
+.j-ic{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--txt);cursor:pointer;font-size:13px}
+.j-ic.on{background:rgba(0,229,255,.18);border-color:var(--cyan)}
+.j-ic.rec{background:rgba(255,84,112,.25);border-color:var(--red);animation:pulse 1s infinite}
+.j-log{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.j-msg{max-width:86%;padding:10px 12px;border-radius:12px;font-size:13.5px;line-height:1.5;white-space:pre-wrap}
+.j-msg.me{align-self:flex-end;background:linear-gradient(135deg,var(--cyan),var(--violet));color:#04122a;font-weight:500}
+.j-msg.bot{align-self:flex-start;background:var(--panel);border:1px solid var(--line)}
+.j-input{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+.j-input input{flex:1;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:rgba(8,12,28,.7);color:var(--txt);outline:none;font-size:14px}
+.j-input input:focus{border-color:var(--cyan)}
+.j-input button{width:44px;border:none;border-radius:10px;background:linear-gradient(135deg,var(--cyan),var(--violet));color:#04122a;font-size:16px;cursor:pointer}
+.j-sugs{display:flex;gap:6px;flex-wrap:wrap;padding:0 10px 12px}
+.j-sug{font-size:11.5px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer}
+.j-sug:hover{border-color:var(--cyan);color:var(--txt)}
+.foot{margin-top:30px;text-align:center;color:var(--dim);font-size:11.5px;line-height:1.7}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:rgba(120,160,255,.2);border-radius:9px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:var(--cyan);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="login">
+  <form class="login-card" id="loginForm" autocomplete="on">
+    <svg class="brain" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="44" fill="#0a1030" stroke="url(#g)" stroke-width="3"/>
+      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#00e5ff"/><stop offset="1" stop-color="#8b5cff"/></linearGradient></defs>
+      <circle cx="50" cy="50" r="9" fill="#00e5ff"/>
+      <g stroke="#3d8bff" stroke-width="1.4" opacity=".75">
+        <line x1="50" y1="50" x2="26" y2="30"/><line x1="50" y1="50" x2="74" y2="30"/>
+        <line x1="50" y1="50" x2="24" y2="68"/><line x1="50" y1="50" x2="76" y2="68"/>
+        <line x1="50" y1="50" x2="50" y2="22"/></g>
+      <g fill="#8b5cff"><circle cx="26" cy="30" r="4"/><circle cx="74" cy="30" r="4"/>
+        <circle cx="24" cy="68" r="4"/><circle cx="76" cy="68" r="4"/><circle cx="50" cy="22" r="4"/></g>
+    </svg>
+    <h1>Centro de Mando Neuronal</h1>
+    <p class="sub">NEXTEP Asesores · Acceso de administración</p>
+    <div class="field">
+      <label>Correo</label>
+      <input id="email" type="email" autocomplete="username" placeholder="admin@…" required />
+    </div>
+    <div class="field">
+      <label>Contraseña</label>
+      <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
+    </div>
+    <button class="btn" id="loginBtn" type="submit">Entrar al panel</button>
+    <div class="err" id="loginErr"></div>
+  </form>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app" class="hidden">
+  <header class="top">
+    <div class="logo">
+      <div class="dot">N</div>
+      <div><b>NEURON · Centro de Mando</b><span>NEXTEP Asesores</span></div>
+    </div>
+    <div class="spacer"></div>
+    <span class="pill" id="rtPill"><span class="led" id="rtLed"></span><span id="rtTxt">conectando…</span></span>
+    <span class="pill" id="refreshPill"><span id="refreshTxt">—</span></span>
+    <span class="pill" id="botPill" title="Agentes 24/7 en la nube (pg_cron)">🛰️ 24/7</span>
+    <button class="icon-btn" id="autoBtn">⏸ Auto</button>
+    <button class="icon-btn" id="reloadBtn">↻ Actualizar</button>
+    <button class="icon-btn" id="logoutBtn">Salir</button>
+  </header>
+
+  <!-- MISIÓN CEO -->
+  <div class="section-title">🎯 Misión del CEO · prioridad máxima</div>
+  <div class="card mission" id="mission"></div>
+
+  <!-- KPIs HOY -->
+  <div class="section-title">Hoy</div>
+  <div class="kpis" id="kpisToday"></div>
+
+  <!-- KPIs ACCIÓN -->
+  <div class="section-title">Pendiente de acción</div>
+  <div class="kpis" id="kpisAction"></div>
+
+  <!-- KPIs GLOBAL -->
+  <div class="section-title">Visión global</div>
+  <div class="kpis" id="kpisGlobal"></div>
+
+  <!-- CEO + NEURAL MAP -->
+  <div class="section-title">La Neurona · CEO y sus agentes</div>
+  <div class="grid2">
+    <div class="card neuro-wrap">
+      <h3>Red neuronal de agentes</h3>
+      <p class="muted">El CEO orquesta a los agentes. El color del nodo refleja la severidad máxima detectada.</p>
+      <svg id="neuro" viewBox="0 0 600 420"></svg>
+      <div class="legend">
+        <span><i style="background:var(--ok)"></i>Sin incidencias</span>
+        <span><i style="background:var(--med)"></i>Media</span>
+        <span><i style="background:var(--high)"></i>Alta</span>
+        <span><i style="background:var(--crit)"></i>Crítica</span>
+        <span><i style="background:var(--dim)"></i>En pausa</span>
+      </div>
+    </div>
+    <div class="card exec">
+      <h3>🧠 Resumen del CEO</h3>
+      <div class="headline" id="ceoHeadline">Analizando la operación…</div>
+      <div class="sev-row" id="ceoSev"></div>
+      <div class="directive">
+        <label class="muted" style="font-size:12px">Directiva al CEO (orienta a los agentes)</label>
+        <textarea id="directive" placeholder="Ej.: priorizar AML en retiros, acelerar conversión de potenciales, vigilar caída de depósitos…"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROSTER DE AGENTES -->
+  <div class="section-title">Plantilla de agentes · el CEO contrata y asigna</div>
+  <div class="agents" id="roster"></div>
+
+  <!-- FINDINGS INBOX -->
+  <div class="section-title">Bandeja de hallazgos · fallos, riesgos y mejoras</div>
+  <div class="card">
+    <div class="toolbar" id="findToolbar"></div>
+    <div class="findings" id="findings"></div>
+  </div>
+
+  <!-- APROBACIONES -->
+  <div class="section-title">🔔 Centro de aprobaciones · acciones de ASI</div>
+  <div class="card">
+    <p class="muted">ASI ejecuta sola las acciones de bajo riesgo que autorizaste. El <b>dinero</b> y lo sensible espera <b>tu aprobación</b> aquí (y, en cuanto conectemos Telegram, en tu móvil).</p>
+    <div class="feed" id="approvalsList"></div>
+  </div>
+
+  <!-- LEADS -->
+  <div class="section-title">🧲 Leads · captación reciente</div>
+  <div class="card">
+    <p class="muted">Leads de la calculadora y la landing. "Convertir" crea su ficha de cliente automáticamente y suma al objetivo 2027.</p>
+    <div class="feed" id="leadsList"></div>
+  </div>
+
+  <!-- ACTIVITY + HEALTH -->
+  <div class="section-title">Actividad y salud</div>
+  <div class="grid2">
+    <div class="card">
+      <h3>Actividad en vivo</h3>
+      <p class="muted">Últimos eventos auditados de la plataforma</p>
+      <div class="feed" id="feed"></div>
+    </div>
+    <div class="card">
+      <h3>Salud de los sistemas</h3>
+      <p class="muted">Sondas de los portales (best-effort desde el navegador)</p>
+      <div class="sites" id="sites"></div>
+      <button class="icon-btn" id="pingBtn" style="margin-top:12px">Sondear ahora</button>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="section-title">Tendencias</div>
+  <div class="grid2">
+    <div class="card"><h3>Flujo de caja · 14 días</h3><div class="chart-box"><canvas id="chFlow"></canvas></div></div>
+    <div class="card"><h3>Crecimiento de clientes</h3><div class="chart-box"><canvas id="chClients"></canvas></div></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3>AUM y beneficio · histórico 24/7 🛰️</h3>
+    <p class="muted">Snapshots diarios guardados por el backend en la nube (crece cada día)</p>
+    <div class="chart-box"><canvas id="chAum"></canvas></div>
+  </div>
+
+  <div class="foot">
+    NEURON · Centro de Mando Neuronal — datos en vivo desde Supabase con RLS de administrador.<br/>
+    Los agentes <b>detectan y recomiendan</b>; no ejecutan cambios automáticos sobre la plataforma.
+  </div>
+
+  <!-- JARVIS · asistente -->
+  <button id="jarvisFab" title="Hablar con ASI">🧠<span class="j-badge" id="jBadge"></span></button>
+  <div id="jarvis" class="hidden">
+    <div class="j-head">
+      <div class="j-title">🧠 NEURON · Asistente</div>
+      <div class="j-tools">
+        <button id="jVoice" class="j-ic" title="Voz (leer respuestas)">🔇</button>
+        <button id="jMic" class="j-ic" title="Hablar">🎤</button>
+        <button id="jClose" class="j-ic" title="Cerrar">✕</button>
+      </div>
+    </div>
+    <div class="j-log" id="jLog"></div>
+    <div class="j-input">
+      <input id="jText" type="text" placeholder="Pregúntame: ¿cómo vamos hoy?" autocomplete="off" />
+      <button id="jSend" title="Enviar">➤</button>
+    </div>
+    <div class="j-sugs" id="jSugs"></div>
+  </div>
+</div>
+
+<!-- Librerías (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="agents.js"></script>
+<script src="asi-voice.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
