@@ -844,7 +844,10 @@
     }
     if (has("que recuerdas", "que sabes de mi", "que tienes de mi", "como me llamo")) return jRecall();
     // ── ACCIONES (registra solicitud; ejecuta sola las de bajo riesgo, encola el dinero) ──
-    if (has("crea", "crear", "nuevo", "nueva", "alta") && has("agente")) return jReqAgent(text);
+    const _hasEmail = /[\w.+-]+@[\w.-]+\.\w+/.test(text);
+    if (_hasEmail && has("agente", "asesor") && has("crea", "crear", "nuevo", "alta", "contrat", "fichar", "ficha", "incorpora")) return jReqAgent(text);
+    if (has("captar", "capta", "captacion", "inversor", "conseguir", "crecer", "crecimiento", "mejora", "mejorar", "optimiz", "contrat", "fichar")) return jGrowthPlan(text);
+    if (has("agente", "asesor") && has("crea", "crear", "alta", "nuevo", "incorpora", "da de alta")) return "Para fichar a un asesor dime su email (ej.: \"ficha al agente maria@correo.com\") y lo dejo preparado para tu aprobación. Y si quieres más inversores para su cartera, pídeme \"capta inversores\" y te doy el plan.";
     if (has("aprueba", "aprobar") && has("retiro", "retirada", "reintegro")) return jCreateReq("approve_withdrawal", "Aprobar un retiro (revisar importe y cliente en el panel)", { raw: text }, "money");
     if (has("rechaza", "rechazar") && has("retiro", "retirada", "reintegro")) return jCreateReq("reject_withdrawal", "Rechazar un retiro", { raw: text }, "money");
     if (has("convierte", "convertir") && has("lead")) return jReqLead(text, "convert_lead");
@@ -965,6 +968,21 @@
   function jReqAgent(text) {
     const email = (text.match(/[\w.+-]+@[\w.-]+\.\w+/) || [])[0] || null;
     return jCreateReq("create_agent", `Crear agente${email ? (" " + email) : ""}`, { raw: text, email }, "high");
+  }
+  // Plan de crecimiento: entiende "captar inversores / mejorar / contratar agentes / crecer"
+  function jGrowthPlan(text) {
+    const q = jn(text), g = state.agg.goal || {};
+    const recs = (state.findings || []).filter(f => ["marketing", "seo", "social", "captacion", "conversion"].includes(f.agentId) && !f.acked);
+    const top = recs.slice(0, 5).map(f => `• ${f.title}`).join("\n")
+      || "• 1 guía SEO de intención + 1 vídeo corto, difundidos en grupos 50+\n• 1 webinar mensual y pedir referidos a clientes\n• Alianzas con gestorías y colectivos de prejubilados";
+    const base = /^https?:/.test(location.href) ? location.origin : "https://asi.nextstepasesor.com";
+    let out = asiSay("growth");
+    out += `\n\nObjetivo: ${g.target || 2000} registros antes de 2027 (vamos ${jStatus(g.status)}). Lo que movería ya para captar inversores:\n${top}`;
+    out += `\n\nComparte estos enlaces y empezarán a entrar leads al panel:\n• ${base}/activos/landing-complementar-pension.html\n• ${base}/activos/calculadora-pension.html`;
+    if (/contrat|fichar|ficha|agente|asesor/.test(q))
+      out += `\n\nPara fichar un asesor dime su email (ej.: "ficha al agente maria@correo.com") y lo dejo preparado para tu aprobación.`;
+    out += `\n\n¿Quieres que te prepare el contenido, que priorice los leads que ya tienes, o que fiche a alguien?`;
+    return out;
   }
 
   /* ---------- arranque ---------- */
