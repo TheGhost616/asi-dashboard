@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Calculadora de complemento de pensión · NEXTEP</title>
+<meta name="description" content="Calcula gratis, de forma orientativa, cuánto podrías acumular para complementar tu pensión empezando desde 250 €." />
+<style>
+  :root{--bg:#070b18;--panel:#0e1530;--line:rgba(120,160,255,.18);--txt:#e7ecff;--muted:#8da0c8;--cyan:#00e5ff;--violet:#8b5cff;--green:#26e6a6}
+  *{box-sizing:border-box} body{margin:0;font-family:'Segoe UI',system-ui,Arial,sans-serif;background:
+    radial-gradient(900px 500px at 85% -10%,rgba(139,92,255,.18),transparent 55%),var(--bg);color:var(--txt);padding:24px}
+  .wrap{max-width:720px;margin:0 auto}
+  h1{font-size:23px;margin:0 0 6px} .sub{color:var(--muted);font-size:14px;margin:0 0 22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;margin-bottom:16px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:560px){.grid{grid-template-columns:1fr}}
+  label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px}
+  input[type=number],input[type=email],input[type=text],input[type=range]{width:100%}
+  input[type=number],input[type=email],input[type=text]{padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:#0a1126;color:var(--txt);font-size:15px;outline:none}
+  input:focus{border-color:var(--cyan)}
+  .rng{display:flex;align-items:center;gap:10px} .rng output{min-width:54px;text-align:right;font-weight:700;color:var(--cyan)}
+  .btn{width:100%;padding:14px;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;
+    background:linear-gradient(135deg,var(--cyan),var(--violet));color:#04122a;margin-top:6px}
+  .result{display:none;text-align:center;padding:8px 0}
+  .result.show{display:block}
+  .big{font-size:38px;font-weight:800;color:var(--green);margin:6px 0}
+  .muted{color:var(--muted);font-size:13px}
+  .row2{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+  .chip{background:#0a1126;border:1px solid var(--line);border-radius:12px;padding:10px 16px;min-width:150px}
+  .chip .l{font-size:11px;color:var(--muted)} .chip .v{font-size:20px;font-weight:700}
+  .lead{margin-top:18px} .lead .chk{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--muted);margin:10px 0}
+  .disc{font-size:11.5px;color:var(--muted);line-height:1.6;border-top:1px solid var(--line);padding-top:14px;margin-top:6px}
+  a{color:var(--cyan)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧮 Calculadora de complemento de pensión</h1>
+  <p class="sub">Estimación <b>orientativa</b> de cuánto podrías acumular empezando desde 250 €. No es una promesa ni asesoramiento.</p>
+
+  <div class="card">
+    <div class="grid">
+      <div><label>Tu edad actual</label><input type="number" id="edad" value="55" min="18" max="80"></div>
+      <div><label>Edad de jubilación</label><input type="number" id="jub" value="67" min="50" max="80"></div>
+      <div><label>Ahorro inicial (€)</label><input type="number" id="inicial" value="250" min="0" step="50"></div>
+      <div><label>Aportación mensual (€)</label><input type="number" id="mensual" value="100" min="0" step="10"></div>
+    </div>
+    <div style="margin-top:14px">
+      <label>Rentabilidad anual estimada (escenario): <span id="rOut" style="color:var(--cyan);font-weight:700">4%</span></label>
+      <div class="rng"><input type="range" id="rent" min="0" max="8" step="0.5" value="4"><output id="rOut2">4%</output></div>
+      <p class="muted" style="margin:6px 0 0">Es un supuesto para ilustrar; el resultado real depende del producto y del mercado.</p>
+    </div>
+    <button class="btn" id="calc">Calcular mi estimación</button>
+
+    <div class="result" id="result">
+      <p class="muted">Al jubilarte podrías haber acumulado, de forma orientativa:</p>
+      <div class="big" id="total">—</div>
+      <div class="row2">
+        <div class="chip"><div class="l">Tú habrás aportado</div><div class="v" id="aportado">—</div></div>
+        <div class="chip"><div class="l">Complemento mensual aprox.*</div><div class="v" id="renta">—</div></div>
+      </div>
+      <p class="muted" style="margin-top:10px">*Estimación con la "regla del 4%" anual. Solo ilustrativo.</p>
+
+      <div class="lead">
+        <p class="muted">¿Quieres que te ayudemos a hacerlo realidad, a tu ritmo y según tu perfil?</p>
+        <div class="grid">
+          <input type="text" id="nombre" placeholder="Tu nombre">
+          <input type="email" id="email" placeholder="Tu email">
+        </div>
+        <label class="chk"><input type="checkbox" id="rgpd"> Acepto que NEXTEP me contacte y trate mis datos según su <a href="#">política de privacidad</a> (RGPD).</label>
+        <button class="btn" id="enviar">Quiero orientación gratis</button>
+        <p id="gracias" class="muted" style="display:none;color:var(--green);margin-top:10px">✅ ¡Gracias! Te escribiremos pronto. (Conecta este formulario a tu CRM/Supabase para guardar el lead.)</p>
+      </div>
+    </div>
+  </div>
+
+  <p class="disc">
+    <b>Aviso de riesgo.</b> Invertir conlleva riesgos, incluida la posible pérdida del capital.
+    Las rentabilidades pasadas no garantizan rentabilidades futuras. Esta calculadora ofrece una
+    estimación orientativa de carácter general y <b>no constituye asesoramiento ni recomendación
+    de inversión</b>. Cualquier decisión debe basarse en el análisis de tu situación y un test de
+    idoneidad. NEXTEP Asesores · marco normativo CNMV (España).
+  </p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // Conexión a Supabase (clave publishable = pública por diseño; la protege RLS)
+  const SB_URL = "https://gtbabarvybekkoopzskq.supabase.co";
+  const SB_KEY = "sb_publishable_v_14fq-nLnFQ5c5UOwZtIw_E_ekX1jt";
+  const sbLead = window.supabase ? window.supabase.createClient(SB_URL, SB_KEY) : null;
+
+  const $ = id => document.getElementById(id);
+  const eur = n => n.toLocaleString("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0});
+  function sync(){ $("rOut").textContent = $("rOut2").value = $("rent").value + "%"; }
+  $("rent").addEventListener("input", sync); sync();
+
+  $("calc").addEventListener("click", () => {
+    const edad=+$("edad").value, jub=+$("jub").value, P=+$("inicial").value, PMT=+$("mensual").value, r=+$("rent").value/100;
+    const years = Math.max(0, jub - edad), n = years*12, rm = r/12;
+    let fv;
+    if (rm === 0) fv = P + PMT*n;
+    else fv = P*Math.pow(1+rm,n) + PMT*((Math.pow(1+rm,n)-1)/rm);
+    const aportado = P + PMT*n;
+    const rentaMensual = fv*0.04/12;
+    $("total").textContent = eur(fv);
+    $("aportado").textContent = eur(aportado);
+    $("renta").textContent = eur(rentaMensual);
+    $("result").classList.add("show");
+    $("result").scrollIntoView({behavior:"smooth", block:"nearest"});
+  });
+
+  $("enviar").addEventListener("click", async () => {
+    if(!$("email").value || !$("rgpd").checked){ alert("Indica tu email y acepta la política de privacidad."); return; }
+    $("enviar").disabled = true; $("enviar").textContent = "Enviando…";
+    const lead = {
+      full_name: $("nombre").value.trim() || null,
+      email: $("email").value.trim(),
+      source: "calculadora",
+      payload: { edad:+$("edad").value, jubilacion:+$("jub").value, inicial:+$("inicial").value,
+                 mensual:+$("mensual").value, rentabilidad:+$("rent").value, total_estimado:$("total").textContent }
+    };
+    try {
+      if(!sbLead) throw new Error("SDK no cargado");
+      const { error } = await sbLead.from("leads").insert(lead);
+      if(error) throw error;
+      $("gracias").style.display = "block";
+      $("enviar").textContent = "Enviado ✅";
+    } catch(e) {
+      console.error("Error guardando lead:", e);
+      $("enviar").disabled = false; $("enviar").textContent = "Reintentar";
+      alert("No se pudo enviar ahora mismo. Inténtalo de nuevo.");
+    }
+  });
+</script>
+</body>
+</html>
