@@ -87,12 +87,13 @@
       sb.from("neuron_agents").select("id,last_run_at,enabled"),
       sb.from("leads").select("id,email,full_name,status,source,created_at").order("created_at", { ascending: false }).limit(5000),
       sb.from("neuron_action_requests").select("id,source,action_type,summary,params,risk,status,result,created_at").order("created_at", { ascending: false }).limit(60),
+      sb.from("agent_tasks").select("id,agent_id,title,detail,status,priority,due,created_at").order("created_at", { ascending: false }).limit(200),
     ]);
     const val = (i) => (q[i].status === "fulfilled" && !q[i].value.error) ? (q[i].value.data || []) : [];
     state.data = {
       profiles: val(0), clients: val(1), movements: val(2), withdrawals: val(3),
       operations: val(4), tickets: val(5), audit: val(6), documents: val(7), market_prices: val(8),
-      serverFindings: val(9), metricsDaily: val(10), neuronAgents: val(11), leads: val(12), actions: val(13),
+      serverFindings: val(9), metricsDaily: val(10), neuronAgents: val(11), leads: val(12), actions: val(13), tasks: val(14),
     };
     state.byClient = {}; state.data.clients.forEach(c => state.byClient[c.id] = c);
     state.loaded = true;
@@ -458,6 +459,57 @@
     });
   }
 
+  /* ---------- TAREAS DE AGENTES ---------- */
+  function renderTasks() {
+    const addBox = $("#tasksAdd"), list = $("#tasksList"); if (!list) return;
+    if (addBox) {
+      const agents = (state.data.profiles || []).filter(p => p.role === "agent");
+      const opts = ['<option value="">— Sin asignar —</option>'].concat(
+        agents.map(a => `<option value="${a.id}">${a.full_name || a.email || a.id.slice(0, 8)}</option>`)).join("");
+      addBox.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px";
+      addBox.innerHTML = `
+        <select id="tNewAgent" class="t-inp">${opts}</select>
+        <input id="tNewTitle" class="t-inp" style="flex:1;min-width:160px" placeholder="Nueva tarea para el agente…">
+        <select id="tNewPrio" class="t-inp"><option value="normal">Normal</option><option value="high">Alta</option><option value="low">Baja</option></select>
+        <button class="mini-btn" id="tAdd">+ Asignar</button>`;
+      $("#tAdd").addEventListener("click", addTask);
+      $("#tNewTitle").addEventListener("keydown", e => { if (e.key === "Enter") addTask(); });
+    }
+    list.innerHTML = "";
+    const tasks = state.data.tasks || [];
+    if (!tasks.length) { list.appendChild(el("div", "empty", 'Sin tareas. Asigna la primera arriba, o díselo a ASI: "crea tarea para [agente]: …".')); return; }
+    const nameOf = id => { const p = (state.data.profiles || []).find(x => x.id === id); return p ? (p.full_name || p.email) : "sin asignar"; };
+    const stTag = s => s === "done" ? '<span class="tag" style="color:var(--green)">hecha ✅</span>' : s === "in_progress" ? '<span class="tag" style="color:var(--amber)">en curso</span>' : '<span class="tag" style="color:var(--cyan)">pendiente</span>';
+    const prTag = p => p === "high" ? '<span class="tag" style="color:var(--red)">alta</span>' : p === "low" ? '<span class="tag">baja</span>' : "";
+    tasks.slice(0, 40).forEach(t => {
+      const row = el("div", "row");
+      row.innerHTML = `<div class="av">📋</div>
+        <div class="ftxt"><b>${t.title}</b>
+          <div class="muted" style="font-size:11px">${nameOf(t.agent_id)} · ${timeAgo(t.created_at)} · ${stTag(t.status)} ${prTag(t.priority)}</div></div>`;
+      const acts = el("div"); acts.style.cssText = "display:flex;gap:6px";
+      acts.innerHTML = `<button class="mini-btn" data-cyc="1">${t.status === "done" ? "↺ Reabrir" : "▶ Avanzar"}</button><button class="mini-btn" data-del="1">✕</button>`;
+      acts.querySelector("[data-cyc]").addEventListener("click", () => cycleTask(t));
+      acts.querySelector("[data-del]").addEventListener("click", () => delTask(t.id));
+      row.appendChild(acts);
+      list.appendChild(row);
+    });
+  }
+  async function addTask() {
+    const title = $("#tNewTitle").value.trim(); if (!title) { $("#tNewTitle").focus(); return; }
+    const { error } = await sb.from("agent_tasks").insert({ agent_id: $("#tNewAgent").value || null, title, priority: $("#tNewPrio").value, created_by: state.userId, status: "pending" });
+    if (error) { alert("No se pudo crear la tarea: " + error.message); return; }
+    await refresh();
+  }
+  async function cycleTask(t) {
+    const next = t.status === "pending" ? "in_progress" : t.status === "in_progress" ? "done" : "pending";
+    const { error } = await sb.from("agent_tasks").update({ status: next, updated_at: new Date().toISOString() }).eq("id", t.id);
+    if (error) { console.error(error); return; } await refresh();
+  }
+  async function delTask(id) {
+    const { error } = await sb.from("agent_tasks").delete().eq("id", id);
+    if (error) { console.error(error); return; } await refresh();
+  }
+
   /* ---------- LEADS ---------- */
   function renderLeads() {
     const box = $("#leadsList"); if (!box) return;
@@ -674,7 +726,7 @@
   /* ================= ORQUESTACIÓN ================= */
   function renderAll() {
     renderMision(); renderKPIs(); renderCEO(); renderNeuro(); renderRoster();
-    buildToolbarFilters(); renderFindings(); renderApprovals(); renderLeads(); renderFeed(); renderSites(); renderCharts(); renderBotPill();
+    buildToolbarFilters(); renderFindings(); renderApprovals(); renderTasks(); renderLeads(); renderFeed(); renderSites(); renderCharts(); renderBotPill();
     try { asiProactive(); } catch (e) { console.error("asiProactive", e); }
   }
   async function refresh() {
@@ -843,6 +895,9 @@
       ASI_MEM.facts.push(mm[1].trim()); if (ASI_MEM.facts.length > 60) ASI_MEM.facts.shift(); asiMemSave(); return asiSay("learned");
     }
     if (has("que recuerdas", "que sabes de mi", "que tienes de mi", "como me llamo")) return jRecall();
+    // ── TAREAS DE AGENTES ──
+    if (has("tarea", "tareas") && has("crea", "crear", "asigna", "asignar", "nueva", "ponle", "pon ", "añade", "agrega", "anota", "encarga", "manda")) return jCreateTask(text);
+    if (has("tarea", "tareas")) return jTasksList();
     // ── ACCIONES (registra solicitud; ejecuta sola las de bajo riesgo, encola el dinero) ──
     const _hasEmail = /[\w.+-]+@[\w.-]+\.\w+/.test(text);
     if (_hasEmail && has("agente", "asesor") && has("crea", "crear", "nuevo", "alta", "contrat", "fichar", "ficha", "incorpora")) return jReqAgent(text);
@@ -969,6 +1024,33 @@
     const email = (text.match(/[\w.+-]+@[\w.-]+\.\w+/) || [])[0] || null;
     return jCreateReq("create_agent", `Crear agente${email ? (" " + email) : ""}`, { raw: text, email }, "high");
   }
+  // Tareas de agentes por chat/voz
+  async function jCreateTask(text) {
+    let m = text.match(/tarea\s+(?:para|a|de|al)\s+([^:]+?)\s*:\s*(.+)/i), agentId = null, agentName = "", title;
+    if (m) {
+      title = m[2].trim();
+      const nm = jn(m[1]);
+      const ag = (state.data.profiles || []).filter(p => p.role === "agent").find(p => jn(p.full_name || "").includes(nm) || jn(p.email || "").includes(nm));
+      if (ag) { agentId = ag.id; agentName = ag.full_name || ag.email; }
+      else return `No encuentro al agente "${m[1].trim()}". Dime el nombre exacto o créala sin asignar: "crea tarea: ${title}".`;
+    } else {
+      m = text.match(/tarea\s*:?\s*(.+)/i);
+      if (!m) return 'Dímelo así: "crea tarea para [agente]: llamar a los leads nuevos".';
+      title = m[1].trim();
+    }
+    const { error } = await sb.from("agent_tasks").insert({ agent_id: agentId, title, priority: "normal", created_by: state.userId, status: "pending" });
+    if (error) return "No pude crear la tarea: " + error.message;
+    await refresh();
+    return `Hecho ✅ Tarea creada${agentName ? ` para ${agentName}` : " (sin asignar)"}: "${title}". ¿La pongo prioritaria o asigno a alguien?`;
+  }
+  function jTasksList() {
+    const ts = state.data.tasks || [];
+    if (!ts.length) return 'No hay tareas asignadas. Dime "crea tarea para [agente]: …" y la pongo.';
+    const by = s => ts.filter(t => t.status === s).length;
+    const pend = ts.filter(t => t.status !== "done").slice(0, 5).map(t => `• ${t.title}`).join("\n");
+    return `Tareas: ${by("pending")} pendientes, ${by("in_progress")} en curso, ${by("done")} hechas.\n${pend}`;
+  }
+
   // Plan de crecimiento: entiende "captar inversores / mejorar / contratar agentes / crecer"
   function jGrowthPlan(text) {
     const q = jn(text), g = state.agg.goal || {};
