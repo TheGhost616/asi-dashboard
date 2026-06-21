@@ -901,10 +901,15 @@
     // ── ACCIONES (registra solicitud; ejecuta sola las de bajo riesgo, encola el dinero) ──
     const _hasEmail = /[\w.+-]+@[\w.-]+\.\w+/.test(text);
     if (_hasEmail && has("agente", "asesor") && has("crea", "crear", "nuevo", "alta", "contrat", "fichar", "ficha", "incorpora")) return jReqAgent(text);
+    if (has("cliente", "inversor") && has("busc", "conseg", "traer", "trae", "capta", "atrae", "atraer", "mas client", "mas inversor", "nuevos client")) return jGrowthPlan(text);
     if (has("captar", "capta", "captacion", "inversor", "conseguir", "crecer", "crecimiento", "mejora", "mejorar", "optimiz", "contrat", "fichar")) return jGrowthPlan(text);
     if (has("agente", "asesor") && has("crea", "crear", "alta", "nuevo", "incorpora", "da de alta")) return "Para fichar a un asesor dime su email (ej.: \"ficha al agente maria@correo.com\") y lo dejo preparado para tu aprobación. Y si quieres más inversores para su cartera, pídeme \"capta inversores\" y te doy el plan.";
     if (has("aprueba", "aprobar") && has("retiro", "retirada", "reintegro")) return jCreateReq("approve_withdrawal", "Aprobar un retiro (revisar importe y cliente en el panel)", { raw: text }, "money");
     if (has("rechaza", "rechazar") && has("retiro", "retirada", "reintegro")) return jCreateReq("reject_withdrawal", "Rechazar un retiro", { raw: text }, "money");
+    if (has("deposito", "ingreso") && has("rechaz", "deniega", "denega", "no confirm", "no aprueb")) return jMoneyDeposits(text, "reject");
+    if (has("deposito", "ingreso") && has("aprueba", "aprobar", "confirma", "acepta", "valida")) return jMoneyDeposits(text, "approve");
+    if (has("denegalos", "deniegalos", "rechazalos", "denialos", "denegar los", "rechazar los")) return jMoneyDeposits(text, "reject");
+    if (has("apruebalos", "confirmalos", "aceptalos", "validalos", "aprobar los", "confirmar los")) return jMoneyDeposits(text, "approve");
     if (has("convierte", "convertir") && has("lead")) return jReqLead(text, "convert_lead");
     if (has("descarta", "descartar") && has("lead")) return jReqLead(text, "discard_lead");
     if (has("asigna", "asignar") && has("cliente", "agente")) return "Para asignar con seguridad necesito saber el cliente y el agente exactos. Dímelos (o hazlo desde la sección de clientes del panel) y lo dejo preparado.";
@@ -1049,6 +1054,18 @@
     const by = s => ts.filter(t => t.status === s).length;
     const pend = ts.filter(t => t.status !== "done").slice(0, 5).map(t => `• ${t.title}`).join("\n");
     return `Tareas: ${by("pending")} pendientes, ${by("in_progress")} en curso, ${by("done")} hechas.\n${pend}`;
+  }
+
+  // Dinero sobre depósitos pendientes (aprobar/rechazar) — siempre queda registrado, no se ejecuta solo
+  async function jMoneyDeposits(text, mode) {
+    const n = state.agg.depositsPendingCount || 0;
+    if (!n) return "Ahora mismo no hay depósitos pendientes. ¿Te referías a otra cosa?";
+    const verbo = mode === "reject" ? "rechazar" : "confirmar";
+    try {
+      await sb.from("neuron_action_requests").insert({ source: "jarvis", action_type: mode === "reject" ? "reject_deposit" : "approve_deposit", summary: (mode === "reject" ? "Rechazar " : "Confirmar ") + n + " deposito(s) pendiente(s)", params: { count: n, raw: text }, risk: "money", status: "pending", requested_by: state.userId });
+      await refresh();
+    } catch (e) { return "No pude registrarlo: " + (e.message || e); }
+    return `Entendido: ${verbo} los ${n} depósito(s) pendientes. Como es dinero no lo ejecuto yo sola: lo dejé en el Centro de aprobaciones y el ${verbo} final lo confirmas en el panel admin (revisando cada uno). Tú mandas, pero con el dinero vamos sobre seguro. 💰`;
   }
 
   // Plan de crecimiento: entiende "captar inversores / mejorar / contratar agentes / crecer"
