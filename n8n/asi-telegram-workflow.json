@@ -1,0 +1,43 @@
+{
+  "name": "ASI · Telegram (texto)",
+  "nodes": [
+    {
+      "parameters": { "updates": ["message"], "additionalFields": {} },
+      "id": "trigger-asi",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [260, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item=$input.first().json; const msg=item.message||item.edited_message||{}; const text=(msg.text||'').trim(); const chatId=(msg.chat&&msg.chat.id)||''; const URL='https://gtbabarvybekkoopzskq.supabase.co'; const KEY='PEGA_TU_SERVICE_ROLE_AQUI'; const H={apikey:KEY,Authorization:'Bearer '+KEY}; const q=text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); const has=(...k)=>k.some(x=>q.includes(x)); const sb=async(p,opt)=>this.helpers.httpRequest(Object.assign({url:URL+'/rest/v1/'+p,headers:H,json:true},opt||{})); let reply='Soy ASI. Pideme: resumen, leads, tareas o capta inversores.'; try{ if(has('lead')){ const n=await sb('leads?select=full_name,email&status=eq.new&order=created_at.desc&limit=5'); reply=n.length?('Leads nuevos: '+n.map(l=>l.full_name||l.email).join(', ')):'No hay leads nuevos ahora mismo.'; } else if(has('tarea')){ const t=await sb('agent_tasks?select=title,status&order=created_at.desc&limit=6'); reply=t.length?('Tareas: '+t.map(x=>x.title+' ('+x.status+')').join(' | ')):'No hay tareas asignadas.'; } else if(has('capta','inversor','crecer','mejora')){ reply='Plan para captar: comparte la calculadora https://asi.nextstepasesor.com/activos/calculadora-pension.html por WhatsApp 1-a-1, referidos y Rankia. Tienes los mensajes listos en el informe del panel.'; } else if(has('hola','buenas','asi','resumen','como vamos','estado','que tal')){ const c=await sb('clients?select=id'); const l=await sb('leads?select=id&status=eq.new'); reply='Hola! '+c.length+' clientes y '+l.length+' leads nuevos. Objetivo: 2000 antes de 2027. Dime: leads, tareas o capta inversores.'; } }catch(e){ reply='No pude consultar los datos ('+(e.message||e)+'). Revisa la service_role en el nodo.'; } return [{json:{chatId:chatId,reply:reply}}];"
+      },
+      "id": "brain-asi",
+      "name": "ASI (cerebro)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.reply }}",
+        "additionalFields": {}
+      },
+      "id": "reply-asi",
+      "name": "Responder en Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [780, 300]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": { "main": [[{ "node": "ASI (cerebro)", "type": "main", "index": 0 }]] },
+    "ASI (cerebro)": { "main": [[{ "node": "Responder en Telegram", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}
