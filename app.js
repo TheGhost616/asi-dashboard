@@ -900,7 +900,8 @@
     if (has("tarea", "tareas")) return jTasksList();
     // ── ACCIONES (registra solicitud; ejecuta sola las de bajo riesgo, encola el dinero) ──
     const _hasEmail = /[\w.+-]+@[\w.-]+\.\w+/.test(text);
-    if (_hasEmail && has("agente", "asesor") && has("crea", "crear", "nuevo", "alta", "contrat", "fichar", "ficha", "incorpora")) return jReqAgent(text);
+    if (_hasEmail && has("agente", "asesor") && has("crea", "crear", "nuevo", "alta", "contrat", "fichar", "ficha", "incorpora", "da de alta")) return jCreateAgentReal(text);
+    if (has("cliente", "clienta") && has("crea", "crear", "nuevo", "nueva", "registra", "alta", "añade", "agrega", "da de alta", "mete", "apunta")) return jCreateClient(text);
     if (has("cliente", "inversor") && has("busc", "conseg", "traer", "trae", "capta", "atrae", "atraer", "mas client", "mas inversor", "nuevos client")) return jGrowthPlan(text);
     if (has("captar", "capta", "captacion", "inversor", "conseguir", "crecer", "crecimiento", "mejora", "mejorar", "optimiz", "contrat", "fichar")) return jGrowthPlan(text);
     if (has("agente", "asesor") && has("crea", "crear", "alta", "nuevo", "incorpora", "da de alta")) return "Para fichar a un asesor dime su email (ej.: \"ficha al agente maria@correo.com\") y lo dejo preparado para tu aprobación. Y si quieres más inversores para su cartera, pídeme \"capta inversores\" y te doy el plan.";
@@ -1066,6 +1067,39 @@
       await refresh();
     } catch (e) { return "No pude registrarlo: " + (e.message || e); }
     return `Entendido: ${verbo} los ${n} depósito(s) pendientes. Como es dinero no lo ejecuto yo sola: lo dejé en el Centro de aprobaciones y el ${verbo} final lo confirmas en el panel admin (revisando cada uno). Tú mandas, pero con el dinero vamos sobre seguro. 💰`;
+  }
+
+  // Extrae nombre/email/teléfono de una frase en lenguaje natural
+  function jParsePerson(text) {
+    const email = (text.match(/[\w.+-]+@[\w.-]+\.\w+/) || [])[0] || null;
+    const phoneRaw = (text.match(/\+?\d[\d\s().-]{6,}\d/) || [])[0] || null;
+    const phone = phoneRaw ? phoneRaw.replace(/[^\d+]/g, "") : null;
+    let rest = text.replace(/[\w.+-]+@[\w.-]+\.\w+/g, " ").replace(/\+?\d[\d\s().-]{6,}\d/g, " ");
+    rest = rest.replace(/\b(crea|crear|un|una|nuevo|nueva|cliente|clienta|agente|asesor|asesora|con|estos|datos|registra|alta|da|de|anade|añade|agrega|ficha|fichar|incorpora|telefono|tel[eé]fono|tel|movil|m[oó]vil|whatsapp|wasap|numero|n[uú]mero|email|correo|mail|nombre|llamad[oa]|se llama|y|el|la|al|para|por|favor|pon|ponle|esta|este)\b/gi, " ");
+    const words = rest.split(/[\s,;:]+/).filter(w => w.length > 1 && /[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(w) && !/\d/.test(w) && !/@/.test(w));
+    const name = words.slice(0, 3).join(" ").trim() || null;
+    return { name, email, phone };
+  }
+  // CREAR CLIENTE de verdad (RLS admin) desde el chat
+  async function jCreateClient(text) {
+    const p = jParsePerson(text);
+    if (!p.email && !p.name) return 'Para crear un cliente dime al menos nombre y email. Ej.: "crea un cliente Juan Pérez, juan@correo.com, 600111222".';
+    const { error } = await sb.from("clients").insert({ full_name: p.name, email: p.email, phone: p.phone, status: "potential", crm_status: "NUEVO" });
+    if (error) return "No pude crear el cliente: " + error.message;
+    await refresh();
+    return `Hecho ✅ Cliente creado: ${p.name || "(sin nombre)"}${p.email ? " · " + p.email : ""}${p.phone ? " · " + p.phone : ""}. Ya está en la cartera. ¿Le asigno un agente?`;
+  }
+  // CREAR AGENTE de verdad (vía Edge Function segura con service_role en el servidor)
+  async function jCreateAgentReal(text) {
+    const p = jParsePerson(text);
+    if (!p.email) return 'Para crear un agente dime su email. Ej.: "crea un agente María López, maria@correo.com".';
+    try {
+      const { data, error } = await sb.functions.invoke("neuron-create-agent", { body: { email: p.email, full_name: p.name } });
+      if (error) return "No pude crear el agente: " + (error.message || error);
+      if (data && data.ok === false) return "No pude crear el agente: " + (data.error || "error");
+      await refresh();
+      return `Hecho ✅ Agente creado: ${p.name || p.email} (${p.email}). Contraseña temporal: ${data.password} — que la cambie al entrar. Ya puede atender clientes.`;
+    } catch (e) { return "No pude crear el agente: " + (e.message || e); }
   }
 
   // Plan de crecimiento: entiende "captar inversores / mejorar / contratar agentes / crecer"
