@@ -892,10 +892,11 @@
       if (error) throw error;
       if (data && typeof data.reply === "string" && data.reply.trim()) {
         asiHistory.push({ role: "user", content: text });
-        asiHistory.push({ role: "assistant", content: data.reply });
+        asiHistory.push({ role: "assistant", content: data.reply });   // solo el texto, sin secretos
         if (asiHistory.length > 16) asiHistory = asiHistory.slice(-16);
         if (data.didActions) await refresh();
-        return data.reply;
+        const notices = Array.isArray(data.notices) ? data.notices.filter(Boolean) : [];
+        return notices.length ? (data.reply + "\n\n" + notices.join("\n")) : data.reply;
       }
       throw new Error("sin-respuesta");
     } catch (e) {
