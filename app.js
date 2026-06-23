@@ -776,6 +776,7 @@
   const jStatus = (s) => s === "ok" ? "en ritmo" : s === "warn" ? "algo por detrás" : s === "bad" ? "por detrás" : "—";
   const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
   let asiInited = false;
+  let asiHistory = [];   // historial del chat con el cerebro (Claude)
 
   // ---- memoria / aprendizaje (localStorage) ----
   const ASI_MEM = (() => { try { return JSON.parse(localStorage.getItem("asi-mem") || "{}"); } catch (e) { return {}; } })();
@@ -847,9 +848,60 @@
   function jarvisGreet() { if (jGreeted) return; jGreeted = true; jBot(asiSay("greet") + "\n\n" + jBriefing()); }
   function jSubmit() {
     const t = $("#jText").value.trim(); if (!t) return; jMe(t); $("#jText").value = "";
-    const a = jarvisHandle(t);
-    if (a && typeof a.then === "function") a.then(r => jBot(r)).catch(e => jBot("Ups, error: " + (e.message || e)));
-    else setTimeout(() => jBot(a), 140);
+    const typing = el("div", "j-msg bot", "…"); $("#jLog").appendChild(typing); jScroll();
+    asiRespond(t)
+      .then(r => { typing.remove(); jBot(r); })
+      .catch(e => { typing.remove(); jBot("Ups, error: " + (e.message || e)); });
+  }
+  // Contexto en vivo que ASI necesita para razonar y actuar
+  function asiContext() {
+    const A = state.agg || {}, g = A.goal || {}, leads = state.data.leads || [];
+    return {
+      fecha: new Date().toISOString().slice(0, 10),
+      admin: state.adminName || "",
+      memoria: { nombre: ASI_MEM.name || "", notas: (ASI_MEM.facts || []).slice(-8) },
+      kpis: {
+        aum: Math.round(A.aum || 0), clientes: A.clientCount || 0, clientes_activos: A.activeClients || 0,
+        potenciales: A.potentialCount || 0, clientes_nuevos_hoy: A.newClientsToday || 0, clientes_sin_agente: A.clientsNoAgent || 0,
+        agentes_activos: A.activeAgents || 0, agentes_total: A.totalAgents || 0,
+        leads_total: A.leadsTotal || 0, leads_nuevos: A.leadsNew || 0, leads_hoy: A.leadsToday || 0,
+        depositos_pendientes: A.depositsPendingCount || 0, depositos_pend_eur: Math.round(A.depositsPendingEur || 0),
+        retiros_pendientes: A.withdrawalsPendingCount || 0, retiros_pend_eur: Math.round(A.withdrawalsPendingEur || 0),
+        depositado_hoy: Math.round(A.depositedTodayConfirmed || 0), beneficio_total: Math.round(A.totalProfit || 0),
+        tickets_abiertos: A.ticketsOpen || 0,
+        alertas_criticas: (state.findings || []).filter(f => f.sev === "crit" && !f.acked).length
+      },
+      objetivo: g.target ? { meta: g.target, actual: g.current, faltan: g.left, dias_restantes: g.remaining, ritmo_dia: Number((g.perDayNeeded || 0).toFixed(1)), estado: jStatus(g.status) } : null,
+      leads_nuevos_lista: leads.filter(l => /^(new|nuevo)$/i.test((l.status || "").trim())).slice(0, 8).map(l => ({ email: l.email, nombre: l.full_name || "" })),
+      agentes_lista: (state.data.profiles || []).filter(p => p.role === "agent").slice(0, 20).map(p => ({ email: p.email, nombre: p.full_name || "" }))
+    };
+  }
+  // Aprendizaje local (persiste en este navegador aunque responda el cerebro)
+  function asiLearn(text) {
+    let m;
+    if ((m = text.match(/(?:me llamo|ll[aá]mame|puedes llamarme|mi nombre es)\s+([A-Za-zÁÉÍÓÚáéíóúÑñ][\wÁÉÍÓÚáéíóúÑñ'-]{1,24})/i))) { ASI_MEM.name = cap(m[1].trim()); asiMemSave(); }
+    if ((m = text.match(/(?:recuerda|apunta|no olvides|ten en cuenta)(?:\s+que)?\s+(.{3,200})/i))) { ASI_MEM.facts.push(m[1].trim()); if (ASI_MEM.facts.length > 60) ASI_MEM.facts.shift(); asiMemSave(); }
+  }
+  // Responde usando el CEREBRO (Claude vía Edge Function). Si no está disponible, usa el motor local (sin coste).
+  async function asiRespond(text) {
+    asiLearn(text);
+    try {
+      const { data, error } = await sb.functions.invoke("asi-brain", {
+        body: { message: text, history: asiHistory.slice(-8), context: asiContext() }
+      });
+      if (error) throw error;
+      if (data && typeof data.reply === "string" && data.reply.trim()) {
+        asiHistory.push({ role: "user", content: text });
+        asiHistory.push({ role: "assistant", content: data.reply });
+        if (asiHistory.length > 16) asiHistory = asiHistory.slice(-16);
+        if (data.didActions) await refresh();
+        return data.reply;
+      }
+      throw new Error("sin-respuesta");
+    } catch (e) {
+      const r = jarvisHandle(text);
+      return (r && typeof r.then === "function") ? await r : r;
+    }
   }
   function jMe(t) { $("#jLog").appendChild(el("div", "j-msg me", jEsc(t))); jScroll(); }
   function jBot(t) { $("#jLog").appendChild(el("div", "j-msg bot", jEsc(t))); jScroll(); if (jVoiceOn) jSpeak(t); }
