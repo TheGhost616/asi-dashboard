@@ -42,6 +42,27 @@
   .faq summary{cursor:pointer;font-weight:600} .faq p{color:var(--muted);font-size:14px;margin:10px 0 0}
   .disc{font-size:11.5px;color:var(--muted);line-height:1.6;border-top:1px solid var(--line);padding-top:16px;margin-top:30px}
   a{color:var(--cyan)}
+  /* ===== Reclamo: mercado en vivo ===== */
+  .mkt{margin-top:22px}
+  .mkt-h{display:flex;align-items:center;gap:8px;justify-content:center;color:var(--muted);font-size:13px;margin-bottom:12px;text-align:center}
+  .mkt-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 1.6s infinite;flex:0 0 auto}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .ticker{display:flex;gap:10px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}
+  .ticker::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;background:#0a1126;border:1px solid var(--line);border-radius:12px;padding:9px 14px;min-width:120px}
+  .chip .nm{font-size:11.5px;color:var(--muted)}
+  .chip .px{font-size:16px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
+  .chip .ch{font-size:11.5px;font-weight:700;margin-top:1px}
+  .up{color:var(--green)} .down{color:#ff6b81}
+  .mkt-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:6px}
+  @media(max-width:620px){.mkt-grid{grid-template-columns:1fr}}
+  .mkt-card h3{font-size:12px;margin:0 0 8px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .mv{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:5px 0;border-bottom:1px solid var(--line)}
+  .mv:last-child{border:none}
+  .nw{display:block;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--line);color:var(--txt);text-decoration:none;line-height:1.35}
+  .nw:last-child{border:none} .nw:hover{color:var(--cyan)}
+  .sent{font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:6px;margin-left:6px}
+  .s-pos{background:rgba(38,230,166,.15);color:var(--green)} .s-neg{background:rgba(255,107,129,.15);color:#ff6b81} .s-neu{background:rgba(141,160,200,.15);color:var(--muted)}
 </style>
 </head>
 <body>
@@ -54,6 +75,16 @@
       <span>🔒 Datos protegidos (RGPD)</span><span>💶 Desde 250 €</span>
     </div>
   </div>
+
+  <section class="mkt card" aria-label="Mercados financieros en tiempo real">
+    <div class="mkt-h"><span class="mkt-dot"></span> Mercados financieros en tiempo real — los mismos datos que verás dentro de NEXTEP</div>
+    <div class="ticker" id="ticker"><span style="color:var(--muted);font-size:13px">Cargando cotizaciones en vivo…</span></div>
+    <div class="mkt-grid">
+      <div class="mkt-card"><h3>📈 Suben hoy</h3><div id="risers"><span style="color:var(--muted);font-size:12px">Cargando…</span></div></div>
+      <div class="mkt-card"><h3>📉 Bajan hoy</h3><div id="fallers"><span style="color:var(--muted);font-size:12px">Cargando…</span></div></div>
+    </div>
+    <p class="micro" style="margin-top:12px">Acciones, divisas, índices, materias primas y criptomonedas. Cotizaciones con ~15 min de retardo (cripto en directo). Información de mercado de carácter general; no es recomendación de inversión.</p>
+  </section>
 
   <div class="grid">
     <div>
@@ -132,6 +163,40 @@
       alert("No se pudo enviar ahora mismo. Inténtalo de nuevo.");
     }
   });
+</script>
+<script>
+  /* ===== Reclamo: mercado en vivo (lee la función pública de NEXTEP; la clave vive en el servidor) ===== */
+  (function(){
+    const API = "https://client.nextstepasesor.com/.netlify/functions/market-data";
+    const ASSETS = [
+      {s:'XAU/USD',n:'Oro'},{s:'XAG/USD',n:'Plata'},{s:'WTI/USD',n:'Petróleo'},
+      {s:'BTC/USD',n:'Bitcoin'},{s:'ETH/USD',n:'Ethereum'},{s:'SOL/USD',n:'Solana'},
+      {s:'EUR/USD',n:'EUR/USD'},
+      {s:'AAPL',n:'Apple'},{s:'NVDA',n:'Nvidia'},{s:'TSLA',n:'Tesla'}
+    ];
+    const $ = id => document.getElementById(id);
+    function fmt(v){ if(v==null) return '—'; const a=Math.abs(v);
+      return a<1?(+v).toFixed(4):a<100?(+v).toFixed(2):(+v).toLocaleString('es-ES',{maximumFractionDigits:2}); }
+    function chip(x){ const cls=x.ch==null?'':(x.ch>=0?'up':'down');
+      const sign=x.ch==null?'&nbsp;':(x.ch>=0?'▲ +':'▼ ')+Math.abs(x.ch)+'%';
+      return '<div class="chip"><div class="nm">'+x.n+'</div><div class="px">'+fmt(x.px)+'</div><div class="ch '+cls+'">'+sign+'</div></div>'; }
+    function row(x){ const cls=x.ch>=0?'up':'down'; const sign=(x.ch>=0?'+':'')+x.ch+'%';
+      return '<div class="mv"><span>'+x.n+'</span><span class="'+cls+'">'+sign+'</span></div>'; }
+    async function load(){
+      const out=await Promise.all(ASSETS.map(a=>
+        fetch(API+'?symbol='+encodeURIComponent(a.s)+'&type=quote').then(r=>r.json())
+          .then(d=>(d&&!d.error&&d.price!=null)?{n:a.n,px:d.price,ch:(d.percentChange!=null?d.percentChange:null)}:null)
+          .catch(()=>null)));
+      const data=out.filter(Boolean);
+      const tk=$('ticker'); if(tk) tk.innerHTML = data.length?data.map(chip).join(''):'<span style="color:var(--muted);font-size:13px">Mercado no disponible ahora mismo.</span>';
+      const ch=data.filter(x=>x.ch!=null);
+      const up=ch.filter(x=>x.ch>=0).sort((a,b)=>b.ch-a.ch).slice(0,4);
+      const dn=ch.filter(x=>x.ch<0).sort((a,b)=>a.ch-b.ch).slice(0,4);
+      const rs=$('risers'); if(rs) rs.innerHTML = up.length?up.map(row).join(''):'<span style="color:var(--muted);font-size:12px">Sin subidas ahora.</span>';
+      const fl=$('fallers'); if(fl) fl.innerHTML = dn.length?dn.map(row).join(''):'<span style="color:var(--muted);font-size:12px">Sin bajadas ahora.</span>';
+    }
+    load(); setInterval(load, 30000);
+  })();
 </script>
 </body>
 </html>
