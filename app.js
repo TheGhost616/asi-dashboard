@@ -954,6 +954,7 @@
     // ── ACCIONES (registra solicitud; ejecuta sola las de bajo riesgo, encola el dinero) ──
     const _hasEmail = /[\w.+-]+@[\w.-]+\.\w+/.test(text);
     if (_hasEmail && has("agente", "asesor") && has("crea", "crear", "nuevo", "alta", "contrat", "fichar", "ficha", "incorpora", "da de alta")) return jCreateAgentReal(text);
+    if (has("contrasena", "password", "clave") && has("resetea", "restablece", "recupera", "reset", "cambia", "cambiar", "nueva", "temporal", "enlace", "olvid")) return jResetPassword(text);
     if (has("cliente", "clienta") && has("crea", "crear", "nuevo", "nueva", "registra", "alta", "añade", "agrega", "da de alta", "mete", "apunta")) return jCreateClient(text);
     if (has("cliente", "inversor") && has("busc", "conseg", "traer", "trae", "capta", "atrae", "atraer", "mas client", "mas inversor", "nuevos client")) return jGrowthPlan(text);
     if (has("captar", "capta", "captacion", "inversor", "conseguir", "crecer", "crecimiento", "mejora", "mejorar", "optimiz", "contrat", "fichar")) return jGrowthPlan(text);
@@ -1049,7 +1050,7 @@
   function jOpen(q) { const map = [["admin", /admin/], ["agente", /agent/], ["cliente", /client/], ["inicio", /inicio|publica|web/]];
     for (const [lbl, rx] of map) { if (rx.test(q)) { const s = (C.SITES || []).find(x => rx.test(jn(x.name)) || rx.test(lbl)); if (s) { window.open(s.url, "_blank"); return `Abriendo ${s.name}…`; } } }
     return "¿Qué portal abro? Di: abre admin, abre cliente, abre agente o abre inicio."; }
-  function jHelp() { return asiSay("help") + `\n\nÓrdenes útiles: "convierte el lead correo@x.com", "crea un agente correo@x.com", "aprueba un retiro" (el dinero siempre te lo consulto), "abre admin/cliente/agente/inicio", "actualiza". Y para que aprenda: "me llamo…", "recuerda que…", "¿qué recuerdas?". 🎤 para hablar, 🔊 para que conteste en voz.`; }
+  function jHelp() { return asiSay("help") + `\n\nÓrdenes útiles: "convierte el lead correo@x.com", "crea un agente correo@x.com", "resetea la contraseña de correo@x.com" (o "contraseña temporal para…"), "aprueba un retiro" (el dinero siempre te lo consulto), "abre admin/cliente/agente/inicio", "actualiza". Y para que aprenda: "me llamo…", "recuerda que…", "¿qué recuerdas?". 🎤 para hablar, 🔊 para que conteste en voz.`; }
 
   async function jCreateReq(type, summary, params, risk) {
     try {
@@ -1141,6 +1142,31 @@
     if (error) return "No pude crear el cliente: " + error.message;
     await refresh();
     return `Hecho ✅ Cliente creado: ${p.name || "(sin nombre)"}${p.email ? " · " + p.email : ""}${p.phone ? " · " + p.phone : ""}. Ya está en la cartera. ¿Le asigno un agente?`;
+  }
+  // RESTABLECER CONTRASEÑA (vía Edge Function segura; no depende de que lleguen los emails)
+  async function jResetPassword(text) {
+    const q = jn(text);
+    let email = (text.match(/[\w.+-]+@[\w.-]+\.\w+/) || [])[0] || null;
+    if (!email) {
+      const words = new Set(q.split(/[^a-z0-9@.]+/));
+      const cands = (state.data.profiles || []).filter(p => {
+        if (!p.email || !p.full_name) return false;
+        const fn = jn(p.full_name);
+        return q.includes(fn) || fn.split(/\s+/).some(w => w.length > 2 && words.has(w));
+      });
+      if (!cands.length) return 'Dime el email exacto o el nombre tal y como está en el panel, p. ej.: "resetea la contraseña de juan@correo.com". Así no me equivoco de persona.';
+      if (cands.length > 1) return `Hay ${cands.length} usuarios que encajan: ${cands.map(c => c.email).join(", ")}. Dime el email exacto.`;
+      email = cands[0].email;
+    }
+    const wantTemp = q.includes("temporal") || q.includes("provisional");
+    try {
+      const { data, error } = await sb.functions.invoke("admin-reset-password", { body: { email, mode: wantTemp ? "password" : "link" } });
+      if (error) return "No pude restablecer la contraseña: " + (error.message || error);
+      if (!data || data.ok === false) return "No pude restablecer la contraseña: " + ((data && data.error) || "error");
+      if (data.mode === "password")
+        return `Hecho ✅ Contraseña temporal para ${email}:\n${data.password}\nDísela por teléfono o WhatsApp (nunca por escrito en sitios públicos) y que la cambie en cuanto entre a su portal.`;
+      return `Hecho ✅ Enlace para poner contraseña nueva (${email}):\n${data.action_link}\nMándaselo por WhatsApp o como prefieras: funciona aunque no le lleguen nuestros emails. Es de un solo uso y caduca pronto, que lo abra hoy. Si prefieres darle una clave directamente, dime "contraseña temporal para ${email}".`;
+    } catch (e) { return "No pude restablecer la contraseña: " + (e.message || e); }
   }
   // CREAR AGENTE de verdad (vía Edge Function segura con service_role en el servidor)
   async function jCreateAgentReal(text) {
